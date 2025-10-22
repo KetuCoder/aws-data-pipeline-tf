@@ -1,0 +1,63 @@
+name: Terraform Deploy
+
+on:
+  push:
+    branches:
+      - main  # Deploy on push to main branch
+  workflow_dispatch:  # Allow manual trigger from GitHub UI
+
+jobs:
+  terraform:
+    name: Terraform Deploy
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: us-east-1
+      S3_BUCKET_LAMBDA_ZIPS: employee-lambda-zips # optional if storing zips in S3
+
+    steps:
+      # 1️⃣ Checkout the repo
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # 2️⃣ Setup Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.6.0
+
+      # 3️⃣ Configure AWS Credentials (via GitHub secrets)
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 4️⃣ Zip Lambda functions (Terraform will use these zips)
+      - name: Zip Lambda Functions
+        run: |
+          cd lambda
+          zip -r process_csv.zip process_csv.py
+          zip -r daily_summary.zip daily_summary.py
+          cd ..
+
+      # 5️⃣ Terraform Init
+      - name: Terraform Init
+        run: terraform init
+
+      # 6️⃣ Terraform Format Check (optional)
+      - name: Terraform Format
+        run: terraform fmt -check
+
+      # 7️⃣ Terraform Validate
+      - name: Terraform Validate
+        run: terraform validate
+
+      # 8️⃣ Terraform Plan
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+
+      # 9️⃣ Terraform Apply
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan
